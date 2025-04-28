@@ -13,6 +13,7 @@ import { TempFile } from "../../handlers/page/sendMessage";
 import { base64ToStream, streamToBase64 } from "../../webSystem";
 import { NeaxScript } from "@cass-modules/NeaxScript";
 import InputClass from "@cass-modules/InputClass";
+import { inspect } from "util";
 
 export const meta = {
   name: "output",
@@ -39,15 +40,18 @@ export const style = {
  */
 export class OutputResult {
   /**
+   * @type {CommandContext}
+   */
+  #ctx;
+  /**
    *
    * @param {CommandContext} ctx
    * @param {import("output-cassidy").OutputResultInf} result
    */
-
   constructor(ctx, result) {
-    Object.assign(result, this);
+    Object.assign(this, result);
 
-    this.ctx = ctx;
+    this.#ctx = ctx;
     this.result = result;
     this.messageID = this.result.messageID;
     this.body = this.result.body;
@@ -74,24 +78,37 @@ export class OutputResult {
    *
    * @param {Parameters<import("output-cassidy").OutputProps["addReplyListener"]>[1]} callback
    */
-  reply(callback) {
+  atReply(callback) {
     if (typeof callback !== "function") {
       throw new TypeError("Callback is not a function.");
     }
 
-    return this.ctx.output.addReplyListener(this.messageID, callback);
+    return this.#ctx.output.addReplyListener(this.messageID, callback);
   }
 
   /**
    *
    * @param {Parameters<import("output-cassidy").OutputProps["addReactionListener"]>[1]} callback
    */
-  reaction(callback) {
+  atReaction(callback) {
     if (typeof callback !== "function") {
       throw new TypeError("Callback is not a function.");
     }
 
-    return this.ctx.output.addReactionListener(this.messageID, callback);
+    return this.#ctx.output.addReactionListener(this.messageID, callback);
+  }
+
+  /**
+   * @param {Parameters<import("output-cassidy").OutputProps["edit"]>[0]} text
+   * @param {Parameters<import("output-cassidy").OutputProps["edit"]>[2]} delay
+   * @param {Parameters<import("output-cassidy").OutputProps["edit"]>[3]} style
+   */
+  editSelf(text, delay = undefined, style = undefined) {
+    return this.#ctx.output.edit(text, this.messageID, delay, style);
+  }
+
+  unsendSelf() {
+    return this.#ctx.output.unsend(this.messageID);
   }
 }
 
@@ -237,7 +254,7 @@ export async function use(obj) {
      * @returns {Promise<import("output-cassidy").OutputResult>}
      */
     async function output(text, options = { body: "" }) {
-      const { styler } = obj;
+      const styler = obj.input.isCommand ? obj.styler : obj.stylerDummy;
       const newMid = `web:mid-${Date.now()}`;
       if (typeof text === "object") {
         Object.assign(options, text);
@@ -254,6 +271,7 @@ export async function use(obj) {
       let isStr = (str) => typeof str === "string";
       if (!isStr(options)) {
         options.body ??= "";
+        resultInfo.originalOptionsBody = options.body;
         if (Cassidy.config.autoGoogleTranslate) {
           try {
             options.body = (
@@ -288,6 +306,7 @@ export async function use(obj) {
         let command = cmd || repCommand || currData;
         options.body = `${prepend}\n${options.body}\n${append}`;
         options.body = options.body.trim();
+
         const stylerShallow = styler.shallowMake(
           Object.assign({}, options.defStyle ?? {}, input.defStyle ?? {}),
           Object.assign({}, options.style ?? {}, input.style ?? {})
@@ -296,8 +315,6 @@ export async function use(obj) {
         if (options.body) {
           options.body = await processOutput(options);
         }
-
-        resultInfo.originalOptionsBody = options.body;
 
         if (!options.noStyle && options.body) {
           options.body = UNISpectra.standardizeLines(options.body);
@@ -376,10 +393,8 @@ export async function use(obj) {
             // }/api/temp?id=${encodeURIComponent(temp.getFilename())}`;
             url = `/api/temp?id=${encodeURIComponent(temp.getFilename())}`;
           }
-          /**
-           * @type {import("output-cassidy").OutputResult}
-           */
-          const toR = {
+
+          const toR = new OutputResult(obj, {
             ...options,
             ...resultInfo,
             messageID: newMid,
@@ -387,7 +402,8 @@ export async function use(obj) {
             senderID: api.getCurrentUserID(),
             threadID: options.threadID || event.threadID,
             attachment: url ?? null,
-          };
+          });
+
           for (const kk of [input.webQ]) {
             if (!kk || !global.webQuery[kk]) {
               continue;
@@ -422,16 +438,13 @@ export async function use(obj) {
                 //return rej(err);
               }
 
-              /**
-               * @type {import("output-cassidy").OutputResult}
-               */
-              const resu = {
+              const resu = new OutputResult(obj, {
                 ...options,
                 ...info,
                 ...resultInfo,
                 senderID: api.getCurrentUserID() || "",
                 body: options.body,
-              };
+              });
               LASTID = resu.messageID;
               console.log("API RESU", resu);
               res(resu);
@@ -561,6 +574,7 @@ export async function use(obj) {
         }
         api.setMessageReaction(emoji, mid, (err) => {}, true);
       },
+      dispatch: output,
       get prepend() {
         return prepend;
       },
@@ -648,7 +662,7 @@ export async function use(obj) {
         );
       }
     };
-    outputProps.syntaxError = async (commandX) => {
+    outputProps.syntaxError = async function syntaxError(commandX) {
       let cmdName = null;
       if (obj.command || commandX) {
         const { metadata = {} } = obj.command || commandX;
@@ -661,17 +675,29 @@ export async function use(obj) {
       );
     };
     //Only works to Fca of NicaBoT:
-    outputProps.edit = async (text, mid, delay, style = {}, options = {}) => {
+    outputProps.edit = async function edit(
+      text,
+      mid,
+      delay,
+      style = {},
+      options = {}
+    ) {
       //const refStyle = { ...(cmd && cmd.style ? cmd.style : {}), ...style };
       const { styler } = obj;
       const stylerShallow = styler.shallowMake({}, style);
 
       let result = prepend + "\n" + text + "\n" + append;
       result = result.trim();
+
+      if (global.Cassidy.config.censorOutput && result) {
+        result = obj.input.censor(result);
+      }
+
       /*if (Object.keys(refStyle).length > 0) {
         result = await styled(result, refStyle);
       }*/
       result = await processOutput({ ...options, body: result });
+
       result = input.isWss
         ? stylerShallow.html(result)
         : stylerShallow.text(result);
@@ -684,7 +710,7 @@ export async function use(obj) {
         }
       });
     };
-    outputProps.frames = async (...args) => {
+    outputProps.frames = async function frames(...args) {
       let texts = [];
       let mss = [];
       args.forEach((item, index) => {
@@ -792,7 +818,7 @@ function formatError(error) {
       }
     }
   } else {
-    errorMessage = "Invalid error object provided";
+    errorMessage += inspect(error, { depth: null, showHidden: true });
   }
 
   return errorMessage;

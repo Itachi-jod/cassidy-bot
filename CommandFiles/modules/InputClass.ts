@@ -15,6 +15,14 @@ import UserStatsManager from "../../handlers/database/handleStat";
 import OutputProps, { OutputResult } from "output-cassidy";
 import { inspect } from "node:util";
 
+export enum InputRoles {
+  ADMINBOT = 2,
+  MODERATORBOT = 1.5,
+  VIP = 1.2,
+  ADMINBOX = 1,
+  EVERYONE = 0,
+}
+
 export class InputClass extends String implements InputProps {
   public messageID?: string = null;
   public xQ?: any = null;
@@ -27,7 +35,6 @@ export class InputClass extends String implements InputProps {
   public threadID: string = null;
   public author: string = null;
   public reaction: string = null;
-  public password?: string = null;
   public messageReply?: InputClass = null;
   public mentions: { [key: string]: string } = null;
   public attachments: any[] = null;
@@ -61,6 +68,11 @@ export class InputClass extends String implements InputProps {
   public detectUID?: string = null;
   public detectID?: string = null;
   public censor: (text: string) => string;
+  public isCommand?: boolean = false;
+  /**
+   * User roles (2 for bot admin, 1.5 for moderator, 1 for thread admin, 0 for everyone.)
+   */
+  public role: InputRoles = 0;
 
   public webQ?: string = null;
   public defStyle?: any = null;
@@ -76,15 +88,20 @@ export class InputClass extends String implements InputProps {
 
   constructor(obj: CommandContext) {
     const { replies, reacts } = global.Cassidy;
+
     super(String(obj.event?.body || ""));
+    this.#__context = obj;
+
     Object.assign(this, obj.event);
+    if ("password" in this) {
+      delete this.password;
+    }
     this.#__api = obj.api;
     this.#__threadsDB = obj.threadsDB;
     this.censor = censor;
 
     this.processEvent(obj.event, obj.command?.meta?.autoCensor ?? false);
 
-    this.#__context = obj;
     const self = this;
 
     this.ReplySystem = {
@@ -228,6 +245,8 @@ export class InputClass extends String implements InputProps {
     ctx.reactSystem = this.ReactSystem;
     ctx.args = this.arguments;
     ctx.InputClass = InputClass;
+    ctx.role = this.role;
+    ctx.InputRoles = InputRoles;
   }
 
   private processEvent(event: Partial<InputProps>, autoCensor: boolean): void {
@@ -238,7 +257,9 @@ export class InputClass extends String implements InputProps {
       this.author = event.author;
       this.reaction = event.reaction;
       this.messageID = event.messageID;
-      this.password = event.password;
+      this.isCommand = false;
+      // this.password = event.password;
+
       this.mentions = event.mentions ?? {};
       this.attachments = event.attachments ?? [];
       this.timestamp = event.timestamp;
@@ -279,6 +300,7 @@ export class InputClass extends String implements InputProps {
       this.text = this.body;
 
       if (event.messageReply) {
+        console.log(Reflect.ownKeys(this.#__context), new Error());
         this.replier = new InputClass({
           ...this.#__context,
           event: event.messageReply,
@@ -398,7 +420,10 @@ export class InputClass extends String implements InputProps {
   public get isAdmin(): boolean {
     const { ADMINBOT, WEB_PASSWORD } = global.Cassidy?.config ?? {};
     const webPassword = process.env.WEB_PASSWORD ?? WEB_PASSWORD;
-    return this.password === webPassword || ADMINBOT?.includes(this.senderID);
+    return (
+      this.#__context.event.password === webPassword ||
+      ADMINBOT?.includes(this.senderID)
+    );
   }
 
   public get isModerator(): boolean {
@@ -433,12 +458,29 @@ export class InputClass extends String implements InputProps {
     if (refresh) {
       await this.#__threadsDB.saveThreadInfo(this.threadID, this.#__api);
     } else {
+      console.log(Reflect.ownKeys(this.#__context), new Error());
       await this.#__threadsDB.ensureThreadInfo(this.threadID, this.#__api);
     }
     const { threadInfo } = await this.#__threadsDB.getItem(this.threadID);
+
     return Boolean(
       threadInfo && threadInfo.adminIDs.some((i: any) => i.id === uid)
     );
+  }
+
+  public async updateRole() {
+    if (this.isAdmin) {
+      this.role = InputRoles.ADMINBOT;
+    } else if (this.isModerator) {
+      this.role = InputRoles.MODERATORBOT;
+    } else if (await this.isThreadAdmin(this.senderID)) {
+      this.role = InputRoles.ADMINBOX;
+    } else {
+      this.role = InputRoles.EVERYONE;
+    }
+    if (this.replier instanceof InputClass) {
+      await this.replier.updateRole();
+    }
   }
 
   public attachSystemsToOutput(output: OutputProps) {
@@ -577,6 +619,7 @@ export class InputClass extends String implements InputProps {
   }
 
   public async detectAndProcessReplies() {
+    let isCancelCommand = false;
     try {
       const input = this;
       const { commands } = this.#__context;
@@ -584,6 +627,7 @@ export class InputClass extends String implements InputProps {
       const { replies } = global.Cassidy;
 
       if (input.replier && replies[input.replier.messageID]) {
+        isCancelCommand = true;
         const { repObj, commandKey, detectID } =
           replies[input.replier.messageID];
         console.log("ReplySystem", replies[input.replier.messageID]);
@@ -610,6 +654,7 @@ export class InputClass extends String implements InputProps {
     } catch (error) {
       console.log(error);
     }
+    return isCancelCommand;
   }
 
   public async detectAndProcessReactions() {
@@ -734,11 +779,20 @@ export class InputClass extends String implements InputProps {
     return new InputClass(this.#__context);
   }
 
+  hasRole<R extends InputRoles>(role: R) {
+    const specials = [InputRoles.VIP];
+    if (specials.includes(role) || specials.includes(this.role)) {
+      return this.role === role;
+    }
+
+    return this.role >= role;
+  }
+
   toJSON() {
     let ignored = ["ReplySystem", "ReactSystem"];
     return Object.fromEntries(
       Object.entries(this)
-        .filter((i) => typeof i[1] !== "function")
+        .filter((i) => typeof i[1] !== "function" && isNaN(Number(i[0])))
         .filter((i) => !ignored.includes(i[0]))
     );
   }

@@ -18,6 +18,12 @@ import fetchMeta from "../../CommandFiles/modules/fetchMeta";
 import { UNISpectra } from "@cassidy/unispectra";
 import { Inventory } from "@cassidy/ut-shop";
 
+export type UserDataKV = Partial<
+  {
+    [K in keyof UserData as `value.${K}`]: any;
+  } & { key: string }
+>;
+
 export function init(
   this: unknown,
   {
@@ -116,14 +122,19 @@ export default class UserStatsManager {
   process(data: UserData, userID: string | number) {
     data ??= this.defaults;
     data.money ??= 0;
-    data.money = data.money <= 0 ? 0 : parseInt(String(data.money));
+    data.money = data.money <= 0 ? 0 : parseFloat(String(data.money));
 
+    // LMAO
     // if (data.money > Number.MAX_SAFE_INTEGER) {
     //   data.money = Number.MAX_SAFE_INTEGER;
     // }
+
+    if (data.money > Number.MAX_VALUE) {
+      data.money = Number.MAX_VALUE;
+    }
     data.battlePoints ??= 0;
     data.battlePoints =
-      data.battlePoints <= 0 ? 0 : parseInt(String(data.battlePoints));
+      data.battlePoints <= 0 ? 0 : parseFloat(String(data.battlePoints));
     data.exp ??= 0;
     data.inventory ??= [];
     if (isNaN(data.exp)) {
@@ -131,6 +142,10 @@ export default class UserStatsManager {
     }
     if (data.name) {
       data.name = data.name.trim();
+    }
+
+    if (data.bankData?.bank) {
+      data.bankData.bank = Math.min(Number.MAX_VALUE, data.bankData.bank);
     }
 
     if (isNaN(data.battlePoints)) {
@@ -220,7 +235,7 @@ export default class UserStatsManager {
         await this.#mongo.start();
         await this.#mongo.put("test", this.defaults);
       } catch (error) {
-        console.error("MONGODB Error, Activating OFFLINE JSON!", error);
+        console.error("MONGODB Error, Activating JSON DB Mode", error);
         this.isMongo = false;
         this.set("test", this.defaults);
       }
@@ -341,25 +356,77 @@ export default class UserStatsManager {
     return users[key];
   }
 
+  async getIDs() {
+    return (await this.#mongo.keys()) as string[];
+  }
+
   async queryItem<T extends keyof UserData>(
-    key: string,
+    key: string | UserDataKV
+  ): Promise<UserData>;
+
+  async queryItem<T extends keyof UserData>(
+    key: string | UserDataKV,
     ...propertyNames: T[]
-  ): Promise<Pick<UserData, T>> {
+  ): Promise<Pick<UserData, T>>;
+
+  async queryItem<T extends keyof UserData>(
+    key: string | UserDataKV,
+    ...propertyNames: T[]
+  ) {
     if (!this.isMongo) {
       const data = this.readMoneyFile();
-      const userData = data[key] || {};
-      return this.processProperties(userData, key, propertyNames);
+
+      let userData: UserData | undefined;
+      let newKey: string | undefined;
+
+      if (typeof key === "string") {
+        userData = data[key];
+        newKey = key;
+      } else {
+        for (const [k, v] of Object.entries(data)) {
+          let matches = true;
+          for (const [filterKey, filterValue] of Object.entries(key)) {
+            if (v[filterKey] !== filterValue) {
+              matches = false;
+              break;
+            }
+          }
+          if (matches) {
+            userData = v;
+            newKey = k;
+            break;
+          }
+        }
+      }
+
+      if (!userData) {
+        return this.processProperties({}, undefined, propertyNames);
+      }
+
+      const partialData: Partial<UserData> = {};
+      for (const prop of propertyNames) {
+        if (userData.hasOwnProperty(prop)) {
+          partialData[prop] = userData[prop];
+        }
+      }
+
+      return this.processProperties(partialData, newKey, propertyNames);
     }
 
     const selectedFields = propertyNames
       .map((prop) => `value.${prop}`)
       .join(" ");
-    const queryResult = await this.#mongo.KeyValue.find({ key }).select(
-      selectedFields
-    );
-    const partialData = queryResult?.[0]?.value || {};
-
-    return this.processProperties(partialData, key, propertyNames);
+    const queryResult =
+      propertyNames.length > 0
+        ? await this.#mongo.KeyValue.findOne(
+            typeof key === "string" ? { key } : key
+          ).select(selectedFields)
+        : await this.#mongo.KeyValue.findOne(
+            typeof key === "string" ? { key } : key
+          );
+    const partialData = queryResult?.value || {};
+    const newkey = queryResult?.key;
+    return this.processProperties(partialData, newkey, propertyNames);
   }
 
   private processProperties<T extends keyof UserData>(
@@ -367,6 +434,9 @@ export default class UserStatsManager {
     userID: string,
     propertyNames: T[]
   ): Pick<UserData, T> {
+    if (propertyNames.length <= 0) {
+      propertyNames = Object.keys(userData) as T[];
+    }
     const processedData = this.process(
       { ...this.defaults, ...userData } as UserData,
       userID
@@ -718,15 +788,23 @@ export default class UserStatsManager {
   ) {
     try {
       if (this.ignoreQueue.includes(threadID)) {
+        console.log(
+          new Error("saveThreadInfo request ignored because of queue")
+        );
+
         return false;
       }
       if (isNaN(parseInt(threadID))) {
         return false;
       }
-      if (typeof api?.getThreadInfo === "function") {
+      if (
+        "getThreadInfo" in (api ?? {}) &&
+        typeof api?.getThreadInfo === "function"
+      ) {
         this.ignoreQueue.push(threadID);
         const threadInfo = await api.getThreadInfo(threadID);
         if (!threadInfo) {
+          console.log(new Error("Missing thread info on api.getThreadInfo"));
           return false;
         }
         const data = {
@@ -746,6 +824,7 @@ export default class UserStatsManager {
         this.ignoreQueue = this.ignoreQueue.filter((i) => i !== threadID);
         return true;
       }
+
       return false;
     } catch (error) {
       console.error(error);
@@ -753,11 +832,11 @@ export default class UserStatsManager {
     }
   }
 
-  async ensureUserInfo(userID: string) {
+  async ensureUserInfo(userID: string, refUID?: string) {
     const { userMeta } = await this.getCache(userID);
 
     if (!userMeta) {
-      return this.saveUserInfo(userID);
+      return this.saveUserInfo(userID, refUID);
     }
 
     return true;
@@ -779,17 +858,17 @@ export default class UserStatsManager {
   /**
    * Use with caution.
    */
-  async saveUserInfo(userID: string) {
+  async saveUserInfo(userID: string, refUID?: string) {
     try {
       if (this.ignoreQueue.includes(userID)) {
         return false;
       }
-      if (isNaN(parseInt(userID))) {
+      if (isNaN(parseInt(refUID ?? userID))) {
         return false;
       }
       this.ignoreQueue.push(userID);
       const data = {
-        userMeta: await fetchMeta(userID, true),
+        userMeta: await fetchMeta(refUID ?? userID, true),
       };
 
       if (

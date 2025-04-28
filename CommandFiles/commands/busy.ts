@@ -1,12 +1,9 @@
 // @ts-check
 
-import { defineEntry, defineHome } from "@cass/define";
+import { defineHome } from "@cass/define";
 import { limitString, UNISpectra } from "@cassidy/unispectra";
 
-/**
- * @type {CassidySpectra.CommandMeta}
- */
-export const meta = {
+export const meta: CassidySpectra.CommandMeta = {
   name: "busy",
   description:
     "Turning do not disturb mode which notifies a user whenever they tag you.",
@@ -19,12 +16,10 @@ export const meta = {
   waitingTime: 1,
   requirement: "3.0.0",
   icon: "⛔",
+  noWeb: true,
 };
 
-/**
- * @type {CassidySpectra.CommandStyle}
- */
-export const style = {
+export const style: CassidySpectra.CommandStyle = {
   title: "🔕 Busy",
   titleFont: "bold",
   contentFont: "fancy",
@@ -109,7 +104,15 @@ export const entry = defineHome(
   ]
 );
 
-export async function event({ input, output, money }: CommandContext) {
+export async function event({
+  input,
+  output,
+  money,
+  hasPrefix,
+}: CommandContext) {
+  if (input.isWeb || hasPrefix) {
+    return;
+  }
   const { mentions } = input;
 
   if (!mentions || Object.keys(mentions).length == 0) return;

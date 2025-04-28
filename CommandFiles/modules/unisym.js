@@ -237,43 +237,7 @@ export const fontMarkups = new Proxy(
   }
 );
 
-export function abbreviateNumber(value, places = 2, isFull = false) {
-  let num = Number(value);
-  if (isNaN(num)) return "Invalid input";
-  if (num < 1000) {
-    return num.toFixed(places).replace(/\.?0+$/, "");
-  }
-
-  const suffixes = ["", "K", "M", "B", "T", "P", "E"];
-  const fullSuffixes = [
-    "",
-    "Thousand",
-    "Million",
-    "Billion",
-    "Trillion",
-    "Quadrillion",
-    "Quintillion",
-  ];
-
-  const magnitude = Math.floor(Math.log10(num) / 3);
-
-  if (magnitude === 0) {
-    return num % 1 === 0
-      ? num.toString()
-      : num.toFixed(places).replace(/\.?0+$/, "");
-  }
-
-  const abbreviatedValue = num / Math.pow(1000, magnitude);
-  const suffix = isFull ? fullSuffixes[magnitude] : suffixes[magnitude];
-
-  if (abbreviatedValue % 1 === 0) {
-    return `${Math.round(abbreviatedValue)}${isFull ? ` ${suffix}` : suffix}`;
-  }
-
-  const formattedValue = abbreviatedValue.toFixed(places).replace(/\.?0+$/, "");
-
-  return `${formattedValue}${isFull ? ` ${suffix}` : suffix}`;
-}
+export { abbreviateNumber } from "./ArielUtils";
 
 const fsp = require("fs").promises;
 const path = require("path");
@@ -846,4 +810,16 @@ export function limitString(str = "", length = 0) {
   return String(str).length > length
     ? String(str).slice(0, Number(length))
     : String(str);
+}
+
+/**
+ *
+ * @param {number} ms
+ * @returns
+ */
+export function formatTime(ms) {
+  const secs = Math.floor(ms / 1000) % 60;
+  const mins = Math.floor(ms / (1000 * 60)) % 60;
+  const hrs = Math.floor(ms / (1000 * 60 * 60));
+  return hrs > 0 ? `${hrs}h ${mins}m ${secs}s` : `${mins}m ${secs}s`;
 }

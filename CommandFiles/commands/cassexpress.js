@@ -10,17 +10,18 @@ export const meta = {
   waitingTime: 1,
   description: "Advanced and Sophisticated way of managing bank system.",
   category: "Finance",
-  noPrefix: "both",
-  otherNames: ["cexpress", "cbank", "bank"],
+  noPrefix: false,
+  otherNames: ["cexpress", "cbank"],
   requirement: "3.0.0",
   icon: "💵",
   requiredLevel: 5,
+  cmdType: "cplx_g",
 };
 const charm = "✦";
 const circle = "⦿";
 const { parseCurrency: pCy } = global.utils;
 function formatCash(amount) {
-  return `$**${pCy(parseInt(amount))}**💵`;
+  return `$**${pCy(amount)}**💵`;
 }
 function formatTime(time) {
   return global.utils.convertTimeSentence(global.utils.formatTimeDiff(time));
@@ -94,9 +95,7 @@ export async function entry({
     },
     async deposit() {
       let amount =
-        args[1] === "all"
-          ? parseInt(String(userMoney))
-          : parseInt(String(CassExpress.parseAbbr(args[1])));
+        args[1] === "all" ? userMoney : CassExpress.parseAbbr(args[1]);
       if (isNaN(amount) || amount > userMoney) {
         return output.reply(
           `💵 | Please enter a **valid** amount to deposit, your current balance is ${formatCash(
@@ -130,9 +129,7 @@ export async function entry({
 
     async withdraw() {
       let amount =
-        args[1] === "all"
-          ? parseInt(bankData.bank)
-          : parseInt(String(CassExpress.parseAbbr(args[1])));
+        args[1] === "all" ? bankData.bank : CassExpress.parseAbbr(args[1]);
       if (isNaN(amount) || amount > bankData.bank) {
         return output.reply(
           `💵 | Please enter a **valid** amount to withdraw, your current bank balance is ${formatCash(

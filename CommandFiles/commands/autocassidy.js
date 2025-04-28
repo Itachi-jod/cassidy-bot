@@ -11,28 +11,31 @@ export const meta = {
   version: "1.0.0",
   usage: "{prefix}{name}",
   category: "Utilities",
-  permissions: [0],
+  role: 1,
   noPrefix: false,
   waitingTime: 10,
   requirement: "3.0.0",
   icon: "🎮",
   noLevelUI: true,
+  noWeb: true,
+  cmdType: "etc_xcmd",
 };
 
 const url = process.env.AUTOCASS ?? "https://cassidybot.onrender.com";
 const pref = "!";
+
+const dbkey = "autocass";
 
 /**
  *
  * @param {CommandContext} ctx
  */
 export async function entry({ input, args, output, threadsDB }) {
-  const isEna = (await threadsDB.queryItem(input.threadID, "autocass"))
-    ?.autocass;
+  const isEna = (await threadsDB.queryItem(input.threadID, dbkey))?.[dbkey];
   let choice =
     args[0] === "on" ? true : args[0] === "off" ? false : isEna ? !isEna : true;
   await threadsDB.setItem(input.threadID, {
-    autocass: choice,
+    [dbkey]: choice,
   });
 
   return output.reply(`✅ ${choice ? "Enabled" : "Disabled"} successfully!`);
@@ -47,7 +50,7 @@ export async function event({ input, event, output, threadsDB }) {
   if (!["message", "message_reply"].includes(input.type)) {
     return;
   }
-  if (!(await threadsDB.queryItem(input.threadID, "autocass"))?.autocass) {
+  if (!(await threadsDB.getCache(input.threadID))?.[dbkey]) {
     return;
   }
   if (!input.body.startsWith(pref)) {
@@ -100,7 +103,7 @@ export async function event({ input, event, output, threadsDB }) {
           return fetcher(ctx.output, ctx.event, { ...result, body: "" });
         },
       },
-      commandKey: "autocass",
+      commandKey: meta.name,
       detectID: info.messageID,
     };
   }

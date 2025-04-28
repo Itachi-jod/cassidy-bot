@@ -1,3 +1,5 @@
+import { parseBet } from "@cass-modules/ArielUtils";
+
 // @ts-check
 export const style = {
   title: "Casino 🎲",
@@ -41,14 +43,15 @@ export const meta = {
   requirement: "3.0.0",
   icon: "🎲",
   requiredLevel: 3,
+  cmdType: "arl_g",
 };
 
 const { randArrValue } = global.utils;
 
 /**
- * 
- * @param {CommandContext} param0 
- * @returns 
+ *
+ * @param {CommandContext} param0
+ * @returns
  */
 export async function entry({
   input,
@@ -63,9 +66,9 @@ export async function entry({
     cancelCooldown();
   }*/
 
- /**
-  * @type {Array<string | number>}
-  */
+  /**
+   * @type {Array<string | number>}
+   */
   let [inf, bet, ...additionalArgs] = input.arguments;
   const game = Object.keys(gamesInfo).find(
     (i) => String(i).toLowerCase() === String(inf).toLowerCase()
@@ -110,24 +113,14 @@ export async function entry({
     "Sibco",
   ];
   if (gamesWithBets.includes(game)) {
-    if (bet === "all") bet = parseInt(String(playerMoney * 0.75));
-    else bet = parseInt(String(CassExpress.parseAbbr(String(bet))));
+    // if (bet === "all") bet = parseInt(String(playerMoney * 0.75));
+    // else bet = parseInt(String(CassExpress.parseAbbr(String(bet))));
+    bet = parseBet(bet, playerMoney);
 
     if (isNaN(bet) || bet <= 0 || bet > playerMoney) {
       cancelCooldown();
       return output.reply(
         `Invalid bet amount. Your current balance is **${pCy(playerMoney)}**$.`
-      );
-    }
-
-    if (bet > playerMoney * 0.75) {
-      cancelCooldown();
-      return output.reply(`You cannot bet more than 75% of your balance.`);
-    }
-    if (!inventory.has("highRollPass") && bet > 100000) {
-      cancelCooldown();
-      return output.reply(
-        `You need a 🃏 **HighRoll Pass** to place bets over 100000`
       );
     }
   }

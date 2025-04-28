@@ -1,5 +1,7 @@
 // @ts-check
 
+import { parseBet } from "@cass-modules/ArielUtils";
+
 /**
  * @type {CassidySpectra.CommandMeta}
  */
@@ -17,6 +19,7 @@ export const meta = {
   shopPrice: 50000,
   requirement: "3.0.0",
   icon: "💥",
+  cmdType: "arl_g",
 };
 
 export class style {
@@ -52,14 +55,11 @@ export async function entry({
     slotWins = 0,
     slotLooses = 0,
     inventory: rawInv,
-    prizePool = 0,
   } = await money.get(input.senderID);
   const inventory = new Inventory(rawInv);
   let hasPass = inventory.has("highRollPass");
 
-  const betAmount = parseFloat(input.arguments[0]);
-
-  const isAffordable = prizePool * 2 >= betAmount;
+  const betAmount = parseBet(input.arguments[0], userMoney);
 
   const title = styler.getField("title");
 
@@ -86,23 +86,20 @@ export async function entry({
   }
 
   let outcome = Math.random() < 0.3 ? "win" : "lose"; // HAHA DI FAIR
-  if (!isAffordable) {
-    outcome = "lose";
-  }
+
   let resultText;
   let newBalance;
+  const winnings = Math.floor(betAmount * 0.5);
 
   if (outcome === "win") {
-    newBalance = userMoney + betAmount;
+    newBalance = userMoney + winnings;
     drWin += betAmount;
-    prizePool -= betAmount;
-    prizePool = Math.max(0, prizePool);
+
     title.style.line_bottom_inside_text_elegant = `Won`;
-    resultText = `🎉 Congratulations! You doubled your bet and now have ${newBalance}$.`;
+    resultText = `🎉 Congratulations! You won ${winnings}$ and now have ${newBalance}$.`;
   } else {
     newBalance = userMoney - betAmount;
     drLost += betAmount;
-    prizePool += betAmount;
     title.style.line_bottom_inside_text_elegant = `Lost`;
     resultText = `😢 You lost your bet and now have ${newBalance}$.`;
   }
@@ -111,7 +108,6 @@ export async function entry({
     money: newBalance,
     drWin,
     drLost,
-    prizePool,
   });
   const i = slotWins - slotLooses;
 

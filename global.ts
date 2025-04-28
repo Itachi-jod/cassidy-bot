@@ -4,29 +4,16 @@ import type {
   Collectibles,
   generateGift,
   generateTrash,
-  treasures,
   treasureInv,
 } from "./CommandFiles/plugins/ut-shop.js";
 
-import type * as CassidyStylerNPM from "cassidy-styler";
-
 import type InputX from "input-cassidy";
 import type { ReplySystem, ReactSystem } from "input-cassidy";
-import { Express } from "express";
 
 import type OutputX from "output-cassidy";
-import type {
-  OutputForm,
-  OutputProps,
-  OutputResult,
-  StrictOutputForm,
-} from "output-cassidy";
+import type { OutputProps, StrictOutputForm } from "output-cassidy";
 import { CassEXP } from "./CommandFiles/modules/cassEXP.js";
-import type {
-  GameSimulator,
-  GameSimulatorProps,
-  Item,
-} from "./CommandFiles/types/gamesimu.d.ts";
+import type { GameSimulator } from "./CommandFiles/types/gamesimu.d.ts";
 import GlobalUtilsX from "./CommandFiles/types/utils-type";
 
 declare global {
@@ -280,6 +267,11 @@ declare global {
     styler?: CassidyResponseStylerControl;
 
     /**
+     * @deprecated Provides styling utilities for responses.
+     */
+    stylerDummy?: CassidyResponseStylerControl;
+
+    /**
      * Represents the current command context.
      */
     ctx: CommandContext;
@@ -297,7 +289,7 @@ declare global {
     /**
      * Sends an old-style output response.
      */
-    outputOld?: (body: OutputForm, options: StrictOutputForm) => OutputResult;
+    outputOld?: OutputProps["dispatch"];
 
     /**
      * Retrieves the language-specific text for the context.
@@ -308,6 +300,16 @@ declare global {
      * Provides access to the language parser for translations.
      */
     langParser: LangParser;
+
+    /**
+     * User roles (2 for bot admin, 1.5 for moderator, 1 for thread admin, 0 for everyone.)
+     */
+    role: InputRoles;
+
+    /**
+     * User roles as enum.
+     */
+    InputRoles: typeof InputRoles;
 
     /**
      * @deprecated Tracks popular commands used by users.
@@ -679,10 +681,12 @@ declare global {
 
     export interface CommandMeta {
       name: string;
+      fbOnly?: boolean;
       description: string;
       usage?: string;
+      role?: InputRoles;
       category: string;
-      version: string;
+      version: `${string}.${string}.${string}`;
       permissions?: number[];
       author?: string;
       otherNames?: string[];
@@ -707,7 +711,16 @@ declare global {
       params?: any[];
       legacyMode?: boolean;
       [name: string]: any;
+      cmdType?: CommandTypes;
     }
+
+    export type CommandTypes =
+      | "cplx_g"
+      | "arl_g"
+      | "fb_utl"
+      | "smpl_g"
+      | "mdia_utl"
+      | "etc_xcmd";
 
     export type FontTypes =
       | "bold"
@@ -807,7 +820,6 @@ import {
   Quest,
   WildPlayer,
 } from "@cass-plugins/pet-fight.js";
-import { ShopClass } from "@cass-plugins/shopV2.js";
 import { CassidyIO } from "@cass-plugins/output.js";
 import { JsonMap } from "@cass-plugins/JsonMap.js";
 import { CassExpress, CustomAI } from "@cass-plugins/cassexpress.js";
@@ -821,7 +833,7 @@ import {
   TagParser,
 } from "@cass-plugins/utils-liane.js";
 import { TempFile } from "./handlers/page/sendMessage.js";
-import InputClass from "@cass-modules/InputClass.js";
+import InputClass, { InputRoles } from "@cass-modules/InputClass.js";
 // import { defineOutputJSX, defineUserStatsJSX, VNode } from "@cass/define";
 declare global {
   var fileTypePromise: Promise<typeof FileType>;
@@ -1304,3 +1316,5 @@ declare global {
     }
   }
 }
+
+export default {};

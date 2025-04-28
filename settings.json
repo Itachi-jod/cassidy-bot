@@ -33,7 +33,7 @@
   "discordClientID": "",
   "pageAccessToken": "",
   "pageVerifyToken": "",
-  "noFB": true,
+  "noFB": false,
   "credentials": {
     "email": "",
     "password": "",
@@ -49,7 +49,7 @@
   "WEB_PASSWORD": "liaSS-web",
   "maintenanceMode": false,
   "noLevelUI": true,
-  "noRibbonUI": false,
+  "noRibbonUI": true,
   "logPluginChange": false,
   "warnWhenNoPrefix": false,
   "strictNoPrefix": false,
@@ -63,5 +63,8 @@
   "forceWebUID": false,
   "disableInflation": true,
   "standardSpectra": false,
-  "autoGoogleTranslate": ""
+  "autoGoogleTranslate": "",
+  "silentNotiMode": true,
+  "verboseErrorStacks": false,
+  "verboseBotMode": false
 }

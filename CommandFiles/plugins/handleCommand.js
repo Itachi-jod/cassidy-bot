@@ -43,6 +43,7 @@ const handleCD = new Cooldown();
  */
 export async function use(obj) {
   try {
+    let snotiMode = Cassidy.config.silentNotiMode && obj.input.isFacebook;
     const { setAwaitStack, delAwaitStack } = obj;
     obj.isCommand = true;
     function handleNo() {
@@ -73,10 +74,11 @@ export async function use(obj) {
       popularCMD,
       recentCMD,
       money,
+      InputRoles,
     } = obj;
 
     await input.detectAndProcessReactions();
-    await input.detectAndProcessReplies();
+    const willCancelCommand = await input.detectAndProcessReplies();
 
     const ShopClass = obj.ShopClass;
     global.runner = obj;
@@ -115,7 +117,25 @@ export async function use(obj) {
       return;
     }
 
+    if (willCancelCommand) {
+      return handleNo();
+    }
+
+    if (hasPrefix) {
+      if (global.Cassidy.config.maintenanceMode && !input.isAdmin) {
+        await output.reaction("🚀");
+        if (snotiMode) {
+          return handleNo();
+        }
+        return reply(`🚀 | Maintenance Mode. Only bot admins can use the bot.`);
+      }
+    }
+
     if (hasPrefix && String(commandName).includes(".")) {
+      await output.reaction("⚠️");
+      if (snotiMode) {
+        return handleNo();
+      }
       return reply(
         `⚠️ | Commands with dot notation are **no longer supported** and even discouraged, instead use "${prefix}${String(
           commandName
@@ -129,17 +149,14 @@ export async function use(obj) {
         return;
       }
       if (prefix === "/") {
-        return;
-      }
-
-      if (!commandName) {
-        return commands.start?.entry({ ...obj, body: "start", args: [] });
+        return handleNo();
       }
 
       const suggestedCommand = getSuggestedCommand(commandName, commands);
 
-      if (global.Cassidy.config.maintenanceMode && !input.isAdmin) {
-        return reply(`🚀 | Maintenance Mode. Only bot admins can use the bot.`);
+      await output.reaction("❓");
+      if (snotiMode) {
+        return handleNo();
       }
       return output.replyStyled(
         `🔍 cassidy: ${commandName}: command not found\n\n` +
@@ -150,6 +167,8 @@ export async function use(obj) {
         { title: global.Cassidy.logo, titleFont: "bold", contentFont: "none" }
       );
     }
+
+    input.isCommand = true;
 
     obj.isThreadAdmin = isThreadAdmin;
 
@@ -279,6 +298,10 @@ export async function use(obj) {
       if (isFn(banned)) {
         return await banned(obj);
       }
+      await output.reaction("🚫");
+      if (snotiMode) {
+        return handleNo();
+      }
       return reply(`⚠️ | You have been banned from using the bot!
 UID: ${senderID}
 Reason: ${user.banned?.reason || "No reason provided"}
@@ -288,6 +311,10 @@ Date: ${new Date(user.banned?.date).toLocaleString()}`);
     if (meta.noPrefix === false && !hasPrefix) {
       if (isFn(needPrefix)) {
         return await needPrefix(obj);
+      }
+      await output.reaction("💡");
+      if (snotiMode) {
+        return handleNo();
       }
       if (Cassidy.config.warnWhenNoPrefix) {
         return reply(
@@ -333,55 +360,143 @@ Date: ${new Date(user.banned?.date).toLocaleString()}`);
         `⚠️ | The command "${commandName}" is not available in web.`
       );
     }
+    if (meta.fbOnly && !input.isFacebook) {
+      return reply(
+        `⚠️ | The command "${commandName}" is exclusive on facebook.`
+      );
+    }
     if (Array.isArray(meta.whiteList) && !meta.whiteList.includes(senderID)) {
       if (isFn(noPermission)) {
         return await noPermission(obj);
+      }
+      await output.reaction("👑");
+      if (snotiMode) {
+        return handleNo();
       }
       return reply(
         `❌ | You are not allowed to use this command, contact the admin to add you to the whitelist.`
       );
     }
 
-    // const { ADMINBOT } = global.Cassidy.config;
-    if (!meta.permissions) {
-      meta.permissions = [];
-    }
-    if (!meta.permissions?.includes(0) && meta.permissions?.includes(1)) {
-      const info = await isThreadAdmin(senderID);
-      if (!info) {
-        if (isFn(noPermission)) {
-          return await noPermission(obj);
-        }
-        return reply(`❌ | Only gc admins are allowed to use this command.`);
-      }
-    }
-    const isAdmin = input._isAdmin;
-    if (
-      (!meta.permissions?.includes(0) &&
-        !meta.permissions?.includes(1) &&
-        !isAdmin(senderID)) ||
-      (meta.botAdmin && !isAdmin(senderID))
-    ) {
-      if (input.isModerator) {
-        if (!meta.allowModerators) {
-          if (isFn(command.modLower)) {
-            return await command.modLower(obj);
+    if (meta.role in InputRoles && typeof meta.role === "number") {
+      if (!input.hasRole(meta.role)) {
+        /**
+         *
+         * @param {string} emoji
+         * @param {string} message
+         */
+        const reactAndReply = async (emoji, message) => {
+          await output.reaction(emoji);
+          if (snotiMode) return handleNo();
+          return reply(message);
+        };
+
+        const tryNoPermission = async () => {
+          if (isFn(noPermission)) {
+            await noPermission(obj);
+            return true;
           }
+          return false;
+        };
+
+        const roleHandlers = {
+          [InputRoles.ADMINBOT]: async () => {
+            if (input.isModerator) {
+              if (isFn(command.modLower)) return await command.modLower(obj);
+              if (await tryNoPermission()) return;
+
+              return await reactAndReply(
+                "👑",
+                `❌ | Moderators cannot use this command as it requires a higher permission.`
+              );
+            }
+            if (await tryNoPermission()) return;
+
+            return await reactAndReply(
+              "👑",
+              `❌ | Only bot admins are allowed to use this command.`
+            );
+          },
+
+          [InputRoles.MODERATORBOT]: async () => {
+            if (await tryNoPermission()) return;
+            return await reactAndReply(
+              "🛡️",
+              `❌ | Only bot admins and moderators are allowed to use this command.`
+            );
+          },
+
+          [InputRoles.ADMINBOX]: async () => {
+            if (await tryNoPermission()) return;
+            return await reactAndReply(
+              "📦",
+              `❌ | Only thread/box admins and higher permissions are allowed to use this command.`
+            );
+          },
+
+          [InputRoles.EVERYONE]: async () => {},
+
+          [InputRoles.VIP]: async () => {
+            if (await tryNoPermission()) return;
+            return await reactAndReply(
+              "👑",
+              `❌ | Only VIPs are allowed to use this command.`
+            );
+          },
+        };
+
+        const handler = roleHandlers[meta.role];
+        if (isFn(handler)) {
+          return await handler();
+        }
+      }
+    } else if (typeof meta.role === "number" && !(meta.role in InputRoles)) {
+      throw new TypeError("Invalid Role.");
+    } else {
+      if (!meta.permissions) {
+        meta.permissions = [];
+      }
+      if (!meta.permissions?.includes(0) && meta.permissions?.includes(1)) {
+        const info = await isThreadAdmin(senderID);
+        if (!info) {
           if (isFn(noPermission)) {
             return await noPermission(obj);
           }
-          return reply(
-            `❌ | Moderators cannot use this command as it requires a higher permission.`
-          );
+
+          return reply(`❌ | Only gc admins are allowed to use this command.`);
         }
-      } else {
-        if (isFn(noPermission)) {
-          return await noPermission(obj);
+      }
+      const isAdmin = input._isAdmin;
+      if (
+        (!meta.permissions?.includes(0) &&
+          !meta.permissions?.includes(1) &&
+          !isAdmin(senderID)) ||
+        (meta.botAdmin && !isAdmin(senderID))
+      ) {
+        if (input.isModerator) {
+          if (!meta.allowModerators) {
+            if (isFn(command.modLower)) {
+              return await command.modLower(obj);
+            }
+            if (isFn(noPermission)) {
+              return await noPermission(obj);
+            }
+            return reply(
+              `❌ | Moderators cannot use this command as it requires a higher permission.`
+            );
+          }
+        } else {
+          if (isFn(noPermission)) {
+            return await noPermission(obj);
+          }
+          await output.reaction("👑");
+          if (snotiMode) {
+            return handleNo();
+          }
+          return reply(`❌ | Only bot admins are allowed to use this command.`);
         }
-        return reply(`❌ | Only bot admins are allowed to use this command.`);
       }
     }
-
     const cooldownKey = `${senderID}_${meta.name}`;
     if (!meta.waitingTime) {
       meta.waitingTime = 5;
@@ -391,6 +506,10 @@ Date: ${new Date(user.banned?.date).toLocaleString()}`);
       if (isFn(cooldown)) {
         obj.cooldown = handleCD.remainingTime(cooldownKey);
         return await cooldown(obj);
+      }
+      await output.reaction("🕒");
+      if (snotiMode) {
+        return handleNo();
       }
       return reply(
         `⏱️ | Please wait for ${handleCD.remainingTime(
