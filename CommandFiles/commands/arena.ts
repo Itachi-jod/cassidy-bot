@@ -1432,12 +1432,30 @@ export async function entry({
     let wonDias = 0;
     if (!gameState.isAIMode || winner === 1) {
       const cll = new Collectibles(winnerData.collectibles);
+      // astral momints
+      cll.register("stellarGems", {
+        key: "stellarGems",
+        name: "Stellar Gems",
+        flavorText: "Shimmering gems from the cosmos.",
+        icon: "💎",
+        type: "currency",
+      });
+      cll.register("intertwinedFate", {
+        key: "intertwinedFate",
+        name: "Intertwined Fate",
+        flavorText: "The threads that bind destinies together.",
+        icon: "🔮",
+        type: "currency",
+      });
+
       const stre =
         calculatePetStrength(winnerPet) + calculatePetStrength(loserPet);
       const diasReward =
         Math.max(1, Math.min(100, Math.floor(stre / 2 / 500))) || -1;
       if (gameState.isAIMode) {
         cll.raise("gems", diasReward);
+        cll.raise("stellarGems", diasReward);
+        cll.raise("intertwinedFate", diasReward);
         wonDias = diasReward;
       }
       await ctx.money.setItem(winnerId, {
@@ -1462,14 +1480,18 @@ export async function entry({
           } **${winnerPet.petName}** had more health than ${
             loserPet.petIcon
           } **${loserPet.petName}**.\n${winnerName} earned **${winnerPts} 💷**${
-            wonDias ? ` and **${wonDias}** 💎 gems` : ""
+            wonDias
+              ? ` and **${wonDias}** 💎 stellar gems & gems & 🔮 intertwined fate`
+              : ""
           }, ${loserName} earned **${loserPts} 💷**.`
         : `${UNIRedux.charm} ${winnerName} wins!\n${winnerPet.petIcon} **${
             winnerPet.petName
           }** defeated ${loserPet.petIcon} **${
             loserPet.petName
           }**!\n${winnerName} earned **${winnerPts} 💷**${
-            wonDias ? ` and **${wonDias}** 💎 gems` : ""
+            wonDias
+              ? ` and **${wonDias}** 💎 stellar gems & gems & 🔮 intertwined fate!`
+              : ""
           }, ${loserName} earned **${loserPts} 💷**.`,
       style
     );
