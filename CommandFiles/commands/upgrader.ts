@@ -49,7 +49,7 @@ export async function entry({
   {
     name: FontSystem.applyFonts("NOVICE", "double_struck"),
     keySuffix: "NOVICE",
-    statMultiplier: 1.1,
+    statMultiplier: 1.3,
     copiesRequired: 2,
     cost: {
       battlePoints: 5000,
@@ -62,7 +62,7 @@ export async function entry({
   {
     name: FontSystem.applyFonts("STARLIT", "double_struck"),
     keySuffix: "STARLIT",
-    statMultiplier: 1.15,
+    statMultiplier: 1.45,
     copiesRequired: 2,
     cost: {
       battlePoints: 7500,
@@ -75,7 +75,7 @@ export async function entry({
   {
     name: FontSystem.applyFonts("LUNAR", "double_struck"),
     keySuffix: "LUNAR",
-    statMultiplier: 1.2,
+    statMultiplier: 1.5,
     copiesRequired: 3,
     cost: {
       battlePoints: 10000,
@@ -88,7 +88,7 @@ export async function entry({
   {
     name: FontSystem.applyFonts("SOLAR", "double_struck"),
     keySuffix: "SOLAR",
-    statMultiplier: 1.25,
+    statMultiplier: 1.8,
     copiesRequired: 3,
     cost: {
       battlePoints: 12500,
@@ -101,7 +101,7 @@ export async function entry({
   {
     name: FontSystem.applyFonts("ASTRAL", "double_struck"),
     keySuffix: "ASTRAL",
-    statMultiplier: 1.2, // Matches original
+    statMultiplier: 1.9, // Matches original
     copiesRequired: 4,
     cost: {
       battlePoints: 15000,
@@ -114,7 +114,7 @@ export async function entry({
   {
     name: FontSystem.applyFonts("CRYSTAL", "double_struck"),
     keySuffix: "CRYSTAL",
-    statMultiplier: 1.5, // Matches original
+    statMultiplier: 2.0, // Matches original
     copiesRequired: 5,
     cost: {
       battlePoints: 25000,
@@ -127,7 +127,7 @@ export async function entry({
   {
     name: FontSystem.applyFonts("NEBULA", "double_struck"),
     keySuffix: "NEBULA",
-    statMultiplier: 2.0, // Matches original
+    statMultiplier: 2.3, // Matches original
     copiesRequired: 6,
     cost: {
       battlePoints: 40000,
